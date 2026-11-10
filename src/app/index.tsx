@@ -1,8 +1,8 @@
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
 import {
-  Alert,
   AccessibilityInfo,
+  Alert,
   Animated,
   Easing,
   KeyboardAvoidingView,
@@ -530,9 +530,9 @@ export default function HomeScreen() {
           <View style={styles.infoModalContent}>
             <Text style={styles.infoModalTitle}>📖 앱 이용 가이드</Text>
             <Text style={styles.infoModalDesc}>
-              1. 룰렛: 인원수에 맞춰 자동 분할되며, 모두에게 같은 확률로 운전자를 추첨합니다.{'\n'}
-              2. 인물 선택: 고정 연비(황지민/김기현/유승현)를 기반으로 간편하게 선택합니다.{'\n'}
-              3. 유류비 계산: 이동 거리와 유가를 입력해 정확한 비용을 산출합니다.
+              1. 룰렛: 인원수에 맞춰 자동 분할, 모두 같은 확률로 운전자를 추첨.{'\n'}
+              2. 인물 선택: 고정 연비를 기반으로 간편 선택.{'\n'}
+              3. 유류비 계산: 이동 거리와 유가를 입력해 정확한 비용을 산출.
             </Text>
             <TouchableOpacity style={styles.primaryButton} onPress={() => setModalVisible(false)}>
               <Text style={styles.primaryButtonText}>닫기</Text>
