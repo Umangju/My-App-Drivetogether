@@ -1,5 +1,4 @@
 import { NativeTabs } from 'expo-router/native-tabs';
-import { useEffect } from 'react';
 import { Platform, useColorScheme } from 'react-native';
 
 import { Colors } from '@/constants/theme';
@@ -8,19 +7,10 @@ export default function AppTabs() {
   const scheme = useColorScheme();
   const colors = Colors[scheme === 'dark' ? 'dark' : 'light'];
 
-  useEffect(() => {
-    if (Platform.OS === 'web' && typeof document !== 'undefined') {
-      // 주기적으로 상단 개발 바를 찾아 강제로 제거하는 타이머 실행
-      const timer = setInterval(() => {
-        const navBar = document.querySelector('div[data-expo-router-native-tabs], header, #__expo-router-web-navigation');
-        if (navBar) {
-          navBar.remove();
-        }
-      }, 100);
-
-      return () => clearInterval(timer);
-    }
-  }, []);
+  // 만약 웹 브라우저 환경이라면 NativeTabs를 아예 렌더링하지 않고 빈 뷰를 반환하여 개발 바 원천 차단
+  if (Platform.OS === 'web') {
+    return null;
+  }
 
   return (
     <NativeTabs
