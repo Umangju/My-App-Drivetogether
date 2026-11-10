@@ -7,3 +7,10 @@
   --font-rounded: 'SF Pro Rounded', 'Hiragino Maru Gothic ProN', Meiryo, 'MS PGothic', sans-serif;
   --font-serif: Georgia, 'Times New Roman', serif;
 }
+
+/* 웹 브라우저에서 Expo 개발용 상단 네비게이션 바 숨기기 */
+div[data-expo-router-native-tabs], 
+header, 
+#__expo-router-web-navigation {
+  display: none !important;
+}
