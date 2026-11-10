@@ -1,7 +1,8 @@
 import { StatusBar } from 'expo-status-bar';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Alert,
+  AccessibilityInfo,
   Animated,
   Easing,
   KeyboardAvoidingView,
@@ -20,6 +21,7 @@ export default function HomeScreen() {
   const appName = "Project OIL"; 
 
   const [isMuted, setIsMuted] = useState(false);
+  const [soundModalVisible, setSoundModalVisible] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [currentScreen, setCurrentScreen] = useState('main'); // 'main', 'roulette', 'selector', 'calculator'
   
@@ -42,15 +44,51 @@ export default function HomeScreen() {
   const [rouletteWinner, setRouletteWinner] = useState<any>(null);
   const [isSpinning, setIsSpinning] = useState(false);
   const [spinAnimation] = useState(new Animated.Value(0));
+  const [glowAnimation] = useState(new Animated.Value(0));
+  const [revealAnimation] = useState(new Animated.Value(0));
+  const [reduceMotion, setReduceMotion] = useState(false);
+  const spinningRef = useRef(false);
+  const rotationRef = useRef(0);
+
+  useEffect(() => {
+    let active = true;
+    AccessibilityInfo.isReduceMotionEnabled().then(value => {
+      if (active) setReduceMotion(value);
+    }).catch(() => {});
+    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
+    return () => { active = false; subscription.remove(); };
+  }, []);
+
+  useEffect(() => {
+    if (!isSpinning || reduceMotion) return;
+    const pulse = Animated.loop(Animated.sequence([
+      Animated.timing(glowAnimation, { toValue: 1, duration: 700, useNativeDriver: Platform.OS !== 'web' }),
+      Animated.timing(glowAnimation, { toValue: 0, duration: 700, useNativeDriver: Platform.OS !== 'web' }),
+    ]));
+    pulse.start();
+    return () => { pulse.stop(); glowAnimation.setValue(0); };
+  }, [glowAnimation, isSpinning, reduceMotion]);
+
+  useEffect(() => () => {
+    spinningRef.current = false;
+    spinAnimation.stopAnimation();
+    revealAnimation.stopAnimation();
+  }, [spinAnimation, revealAnimation]);
 
   // 상단 메뉴 기능
   const handleDescription = () => setModalVisible(true);
   const handleSettings = () => {
-    setIsMuted(!isMuted);
-    Alert.alert("앱 설정", isMuted ? "소리 켜기 🔊" : "소리 끄기 🔇");
+    setIsMuted(value => !value);
+    setSoundModalVisible(true);
   };
   const handleBack = () => {
     if (currentScreen !== 'main') {
+      spinningRef.current = false;
+      spinAnimation.stopAnimation();
+      revealAnimation.stopAnimation();
+      rotationRef.current = 0;
+      spinAnimation.setValue(0);
+      setIsSpinning(false);
       setCurrentScreen('main');
       setSelectedPerson(null);
       setCalculationResult(null);
@@ -62,7 +100,8 @@ export default function HomeScreen() {
 
   // 룰렛 회전 알고리즘
   const runRoulette = () => {
-    if (isSpinning) return;
+    if (spinningRef.current) return;
+    spinningRef.current = true;
     setIsSpinning(true);
     setRouletteWinner(null);
 
@@ -71,17 +110,28 @@ export default function HomeScreen() {
     const winner = peopleData[randomIndex];
 
     const segmentAngle = 360 / totalCount;
-    const targetDegree = 1800 + (360 - (randomIndex * segmentAngle + segmentAngle / 2));
+    const startDegree = rotationRef.current % 360;
+    const landingDegree = 360 - (randomIndex * segmentAngle + segmentAngle / 2);
+    const targetDegree = startDegree + 1800 + ((landingDegree - startDegree + 360) % 360);
 
-    spinAnimation.setValue(0);
+    revealAnimation.stopAnimation();
+    revealAnimation.setValue(0);
+    spinAnimation.setValue(startDegree);
     Animated.timing(spinAnimation, {
       toValue: targetDegree,
-      duration: 3000,
+      duration: reduceMotion ? 0 : 3600,
       easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start(() => {
+      useNativeDriver: Platform.OS !== 'web',
+    }).start(({ finished }) => {
+      if (!finished || !spinningRef.current) return;
+      rotationRef.current = targetDegree;
+      spinningRef.current = false;
       setRouletteWinner(winner);
       setIsSpinning(false);
+      Animated.timing(revealAnimation, {
+        toValue: 1, duration: reduceMotion ? 0 : 450,
+        easing: Easing.out(Easing.cubic), useNativeDriver: Platform.OS !== 'web',
+      }).start();
     });
   };
 
@@ -169,7 +219,7 @@ export default function HomeScreen() {
         <View style={styles.topRightGroup}>
           <TouchableOpacity onPress={handleDescription}><Text style={styles.topMenuText}>설명</Text></TouchableOpacity>
           <Text style={styles.topDivider}>|</Text>
-          <TouchableOpacity onPress={handleSettings}><Text style={styles.topMenuText}>{isMuted ? "소리 꺼짐" : "소리 켜짐"}</Text></TouchableOpacity>
+          <TouchableOpacity onPress={handleSettings} accessibilityRole="switch" accessibilityLabel="소리" accessibilityState={{ checked: !isMuted }} hitSlop={8}><Text style={styles.topMenuText}>{isMuted ? "소리 꺼짐" : "소리 켜짐"}</Text></TouchableOpacity>
           <Text style={styles.topDivider}>|</Text>
           <TouchableOpacity onPress={handleBack}><Text style={styles.topMenuText}>뒤로가기</Text></TouchableOpacity>
         </View>
@@ -239,16 +289,20 @@ export default function HomeScreen() {
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionBadge}>RANDOM PICK</Text>
               <Text style={styles.sectionTitle}>오늘의 운전자는?</Text>
-              <Text style={styles.sectionDesc}>네온 불꽃 테두리와 함께 공정하게 추첨합니다!</Text>
+              <Text style={styles.sectionDesc}>가볍게 돌리고, 오늘의 운전자를 만나보세요.</Text>
             </View>
 
             <View style={styles.rouletteWrapper}>
+              <Animated.View pointerEvents="none" style={[styles.wheelHalo, {
+                opacity: glowAnimation.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0.65] }),
+                transform: [{ scale: glowAnimation.interpolate({ inputRange: [0, 1], outputRange: [1, 1.07] }) }],
+              }]} />
               <View style={styles.roulettePointer} />
 
               <View style={styles.neonGlowBox}>
                 <Animated.View style={{ transform: [{ rotate: spinInterpolate }] }}>
                   <Svg height="260" width="260" viewBox="0 0 200 200">
-                    <Circle cx="100" cy="100" r="98" fill="#0F172A" stroke="#38BDF8" strokeWidth="3" />
+                    <Circle cx="100" cy="100" r="98" fill="#FFFFFF" stroke="#E2E8F0" strokeWidth="2" />
                     
                     {peopleData.map((person, index) => {
                       const total = peopleData.length;
@@ -261,7 +315,7 @@ export default function HomeScreen() {
 
                       return (
                         <G key={person.id}>
-                          <Path d={createSectorPath(index, total, 92)} fill={person.color} stroke="#0F172A" strokeWidth="1.5" />
+                          <Path d={createSectorPath(index, total, 92)} fill={person.color} stroke="#FFFFFF" strokeWidth="2" />
                           <SvgText 
                             x={textX} 
                             y={textY} 
@@ -277,25 +331,35 @@ export default function HomeScreen() {
                         </G>
                       );
                     })}
+                    <Circle cx="100" cy="100" r="85" fill="none" stroke="#FFFFFF" strokeOpacity="0.5" strokeWidth="0.7" />
                   </Svg>
                 </Animated.View>
 
                 <View style={styles.wheelCenterPin}>
-                  <Text style={styles.wheelCenterPinText}>START</Text>
+                  <Text style={styles.wheelCenterPinText}>{isSpinning ? 'PICK' : 'OIL'}</Text>
                 </View>
               </View>
             </View>
+            <Text style={styles.wheelStatus} accessibilityLiveRegion="polite">
+              {isSpinning ? '행운이 도착하고 있어요…' : rouletteWinner ? '오늘의 드라이버가 정해졌어요' : `${peopleData.length}명 모두에게 같은 기회`}
+            </Text>
 
             <TouchableOpacity 
               style={[styles.primaryButton, isSpinning && { backgroundColor: '#9CA3AF' }]} 
               onPress={runRoulette}
               disabled={isSpinning}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: isSpinning, busy: isSpinning }}
             >
               <Text style={styles.primaryButtonText}>{isSpinning ? "룰렛 돌아가는 중..." : "⚡ 룰렛 돌리기!"}</Text>
             </TouchableOpacity>
 
             {rouletteWinner && !isSpinning && (
-              <View style={styles.winnerCard}>
+              <Animated.View style={[styles.winnerCard, {
+                borderColor: rouletteWinner.color,
+                opacity: revealAnimation,
+                transform: [{ translateY: revealAnimation.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) }],
+              }]} accessibilityLiveRegion="polite">
                 <Text style={styles.winnerSub}>오늘의 행운의 드라이버</Text>
                 <Text style={styles.winnerTitle}>{rouletteWinner.name} 님 당첨! 🎉</Text>
                 <Text style={styles.winnerDetail}>{rouletteWinner.fuelType} · 연비 {rouletteWinner.efficiency} km/L</Text>
@@ -308,7 +372,7 @@ export default function HomeScreen() {
                 >
                   <Text style={styles.proceedBtnText}>{rouletteWinner.name} 차량으로 기름값 계산하기 →</Text>
                 </TouchableOpacity>
-              </View>
+              </Animated.View>
             )}
           </View>
         )}
@@ -415,8 +479,21 @@ export default function HomeScreen() {
 
       </ScrollView>
 
+      <Modal visible={soundModalVisible} transparent animationType="fade" onRequestClose={() => setSoundModalVisible(false)}>
+        <View style={styles.soundOverlay}>
+          <View style={styles.soundDialog} accessibilityViewIsModal>
+            <Text style={styles.soundIcon}>{isMuted ? '🔇' : '🔊'}</Text>
+            <Text style={styles.infoModalTitle} accessibilityRole="header">{isMuted ? '소리를 껐어요' : '소리를 켰어요'}</Text>
+            <Text style={styles.soundDescription}>소리 설정이 {isMuted ? '꺼짐' : '켜짐'}으로 변경되었습니다.</Text>
+            <TouchableOpacity style={styles.primaryButton} accessibilityRole="button" onPress={() => setSoundModalVisible(false)}>
+              <Text style={styles.primaryButtonText}>확인</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* ================= 결과 상세 팝업 모달 ================= */}
-      <Modal visible={resultModalVisible} transparent={true} animationType="slide">
+      <Modal visible={resultModalVisible} transparent={true} animationType="slide" onRequestClose={() => setResultModalVisible(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.resultModalContent}>
             {calculationResult && (
@@ -448,12 +525,12 @@ export default function HomeScreen() {
       </Modal>
 
       {/* ================= 설명 팝업 모달 ================= */}
-      <Modal visible={modalVisible} transparent={true} animationType="fade">
+      <Modal visible={modalVisible} transparent={true} animationType="fade" onRequestClose={() => setModalVisible(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.infoModalContent}>
             <Text style={styles.infoModalTitle}>📖 앱 이용 가이드</Text>
             <Text style={styles.infoModalDesc}>
-              1. 룰렛: 네온 불꽃 이펙트와 함께 인원수에 맞춰 자동 분할되는 동적 룰렛입니다[cite: 6].{'\n'}
+              1. 룰렛: 인원수에 맞춰 자동 분할되며, 모두에게 같은 확률로 운전자를 추첨합니다.{'\n'}
               2. 인물 선택: 고정 연비(황지민/김기현/유승현)를 기반으로 간편하게 선택합니다.{'\n'}
               3. 유류비 계산: 이동 거리와 유가를 입력해 정확한 비용을 산출합니다.
             </Text>
@@ -474,7 +551,7 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F4F3EE' }, // 이미지의 차분한 아이보리/베이지 톤 배경
   scrollContainer: { flexGrow: 1, paddingBottom: 50 },
-  topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 55, paddingBottom: 15 },
+  topBar: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 55, paddingBottom: 15 },
   brandRow: { flexDirection: 'row', alignItems: 'center' },
   brandCircle: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#1E293B', justifyContent: 'center', alignItems: 'center', marginRight: 10 },
   brandCircleText: { color: '#FFF', fontWeight: 'bold', fontSize: 14 },
@@ -514,7 +591,13 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 24, fontWeight: 'bold', color: '#0F172A', marginBottom: 6 },
   sectionDesc: { fontSize: 13, color: '#64748B' },
   
-  rouletteWrapper: { alignItems: 'center', justifyContent: 'center', marginVertical: 20, position: 'relative' },
+  rouletteWrapper: { alignItems: 'center', justifyContent: 'center', marginVertical: 24, paddingVertical: 12, position: 'relative' },
+  wheelHalo: { position: 'absolute', width: 280, height: 280, borderRadius: 140, backgroundColor: '#D9F99D', borderWidth: 1, borderColor: '#A3C775', top: 27 },
+  wheelStatus: { textAlign: 'center', fontSize: 12, fontWeight: '600', color: '#64748B', marginBottom: 4 },
+  soundOverlay: { flex: 1, backgroundColor: 'rgba(15,23,42,0.45)', justifyContent: 'center', alignItems: 'center', padding: 24 },
+  soundDialog: { width: '100%', maxWidth: 360, padding: 28, borderRadius: 24, backgroundColor: '#FFF' },
+  soundIcon: { fontSize: 32, marginBottom: 16 },
+  soundDescription: { fontSize: 14, lineHeight: 22, color: '#64748B', marginBottom: 8 },
   roulettePointer: { 
     width: 0, 
     height: 0, 
@@ -525,19 +608,19 @@ const styles = StyleSheet.create({
     borderTopWidth: 22, 
     borderLeftColor: 'transparent', 
     borderRightColor: 'transparent', 
-    borderTopColor: '#EF4444', 
+    borderTopColor: '#1E293B',
     zIndex: 10, 
     marginBottom: 5 
   },
   neonGlowBox: { 
     padding: 6, 
     borderRadius: 145, 
-    backgroundColor: '#0F172A', 
-    shadowColor: '#38BDF8', 
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#64748B',
     shadowOffset: {width: 0, height: 0}, 
-    shadowOpacity: 0.9, 
-    shadowRadius: 16, 
-    elevation: 12, 
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    elevation: 6,
     alignItems: 'center', 
     justifyContent: 'center' 
   },
