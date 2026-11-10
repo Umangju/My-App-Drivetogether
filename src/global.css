@@ -1,16 +1,26 @@
 :root {
-  --font-display:
-    Spline Sans, Inter, ui-sans-serif, system-ui, sans-serif, Apple Color Emoji, Segoe UI Emoji,
-    Segoe UI Symbol, Noto Color Emoji;
-  --font-mono:
-    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace;
+  --font-display: Spline Sans, Inter, ui-sans-serif, system-ui, sans-serif, Apple Color Emoji, Segoe UI Emoji, Segoe UI Symbol, Noto Color Emoji;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace;
   --font-rounded: 'SF Pro Rounded', 'Hiragino Maru Gothic ProN', Meiryo, 'MS PGothic', sans-serif;
   --font-serif: Georgia, 'Times New Roman', serif;
 }
 
-/* 웹 브라우저에서 Expo 개발용 상단 네비게이션 바 숨기기 */
-div[data-expo-router-native-tabs], 
-header, 
-#__expo-router-web-navigation {
+/* --- [초강력] 웹 브라우저 Expo 개발용 상단 바 및 헤더 강제 제거 --- */
+div[data-expo-router-native-tabs],
+header,
+#__expo-router-web-navigation,
+div:has(> text),
+[class*="expo-router-web-navigation"],
+div[style*="position: fixed"][style*="top: 0"] {
   display: none !important;
+  visibility: hidden !important;
+  height: 0 !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* 상단 여백 초기화 */
+body {
+  padding-top: 0 !important;
+  margin-top: 0 !important;
 }

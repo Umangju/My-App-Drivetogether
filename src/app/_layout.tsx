@@ -13,34 +13,22 @@ export default function TabLayout() {
 
   useEffect(() => {
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
-      // 상단 개발 바를 감지하여 즉시 제거하는 함수
-      const removeDevNavbar = () => {
-        const selectors = [
-          'div[data-expo-router-native-tabs]',
-          'header',
-          '#__expo-router-web-navigation',
-          'div[class*="expo-router"]',
-        ];
-        
-        selectors.forEach((selector) => {
-          document.querySelectorAll(selector).forEach((el) => {
-            // 메인 콘텐츠 영역이 아닌 상단 네비게이션 바만 타겟팅하여 제거
-            if (el.textContent?.includes('Expo Starter') || el.textContent?.includes('Explore')) {
-              el.remove();
-            }
-          });
+      const destroyDevBar = () => {
+        // DOM 전체를 뒤져서 'Expo Starter' 텍스트를 포함하는 상단 바 요소 강제 삭제
+        const allElements = document.querySelectorAll('div, header, nav');
+        allElements.forEach((el) => {
+          if (el.textContent && el.textContent.includes('Expo Starter') && el.children.length < 5) {
+            el.remove();
+          }
         });
       };
 
-      // 페이지 로드 직후 및 DOM 변화 감지 시 즉시 실행
-      removeDevNavbar();
-      const observer = new MutationObserver(removeDevNavbar);
-      observer.observe(document.body, { childList: true, subtree: true });
-
-      return () => observer.disconnect();
+      destroyDevBar();
+      const interval = setInterval(destroyDevBar, 50); // 0.05초마다 감시해서 뜨는 족족 삭제
+      return () => clearInterval(interval);
     }
   }, []);
-  
+
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <AnimatedSplashOverlay />
